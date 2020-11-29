@@ -7,6 +7,7 @@ var multipartMiddleware = multipart();
 var cloudinary = require("../config/cloudinary");
 // Load User model
 const User = require("../models/User");
+const Post = require("../models/Post");
 const { forwardAuthenticated } = require("../config/auth");
 
 // Login Page
@@ -96,6 +97,31 @@ router.get("/logout", (req, res) => {
   res.redirect("/users/login");
 });
 
-
+// Create post
+router.post("/create", multipartMiddleware, (req, res) => {
+  cloudinary.uploader.upload(req.files.image.path, function (result) {
+    // Create a post model
+    // by assembling all data as object
+    // and passing to Model instance
+    var post = new Post({
+      author: req.body.author,
+      title: req.body.title,
+      description: req.body.description,
+      hashtag: req.body.hashtag,
+      created_at: new Date(),
+      // Store the URL in a DB for future use
+      image: result.url,
+      image_id: result.public_id,
+    });
+    // Persist by saving
+    post.save(function (err) {
+      if (err) {
+        req.flash(err);
+      }
+      // Redirect
+      res.redirect("/blog");
+    });
+  });
+});
 
 module.exports = router;
