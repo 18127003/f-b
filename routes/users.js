@@ -8,7 +8,7 @@ var cloudinary = require("../config/cloudinary");
 // Load User model
 const User = require("../models/User");
 const Post = require("../models/Post");
-const { forwardAuthenticated } = require("../config/auth");
+const { forwardAuthenticated, ensureAuthenticated } = require("../config/auth");
 
 // Login Page
 router.get("/login", forwardAuthenticated, (req, res) =>
@@ -17,8 +17,14 @@ router.get("/login", forwardAuthenticated, (req, res) =>
 
 // Register Page
 router.get("/register", forwardAuthenticated, (req, res) =>
-  res.render("pages/register")
+  res.render("pages/register",{errors:null})
 );
+
+router.get("/info", ensureAuthenticated, (req, res)=>{
+  Post.find({'author_id': req.query.id}, function (err, posts){
+    res.render("pages/user_info",{user:req.user, posts:posts})
+  })
+})
 
 // Register
 router.post("/register", (req, res) => {
@@ -104,7 +110,8 @@ router.post("/create", multipartMiddleware, (req, res) => {
     // by assembling all data as object
     // and passing to Model instance
     var post = new Post({
-      author: req.body.author,
+      author_id: req.body.author_id,
+      author_name: req.body.author_name,
       title: req.body.title,
       description: req.body.description,
       hashtag: req.body.hashtag,
@@ -121,6 +128,8 @@ router.post("/create", multipartMiddleware, (req, res) => {
       // Redirect
       res.redirect("/blog");
     });
+    post.on("es-indexed",(err,res)=>{
+    })
   });
 });
 
