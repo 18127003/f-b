@@ -9,6 +9,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  role:{
+    type: String,
+    required: true
+  },
   password: {
     type: String,
     required: true
@@ -16,7 +20,8 @@ const UserSchema = new mongoose.Schema({
   date: {
     type: Date,
     default: Date.now
-  }
+  },
+  avatar: String
 });
 
 const User = mongoose.model("User", UserSchema);
