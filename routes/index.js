@@ -9,7 +9,6 @@ const {
 } = require("../config/auth");
 const Article = require("../models/Article");
 const Post = require("../models/Post");
-const User = require("../models/User");
 
 // Welcome Page
 router.get("/", forwardAuthenticated, async (req, res) => {
@@ -103,4 +102,15 @@ router.get("/home/post", ensureAuthenticated, (req, res) =>
   res.render("pages/post", { user: req.user })
 );
 
+// Create new article
+router.get("/home/new_article",ensureAuthenticated, (req, res)=>{
+  if(req.user.role=="ADMIN"){
+    res.render("pages/new_article",{user:req.user})
+  } else{
+    res.redirect("/home");
+  }
+})
+router.get("/test",myAuth,(req,res)=>{
+  res.render("pages/test");
+})
 module.exports = router;

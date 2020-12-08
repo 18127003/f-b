@@ -8,6 +8,7 @@ var cloudinary = require("../config/cloudinary");
 // Load User model
 const User = require("../models/User");
 const Post = require("../models/Post");
+const Article = require("../models/Article");
 const { forwardAuthenticated, ensureAuthenticated } = require("../config/auth");
 
 // Login Page
@@ -26,9 +27,11 @@ router.get("/info", ensureAuthenticated, (req, res)=>{
   })
 })
 
+
 // Register
 router.post("/register", (req, res) => {
   const { name, email, password, password2 } = req.body;
+  var role="USER"
   let errors = [];
 
   if (!name || !email || !password || !password2) {
@@ -66,6 +69,7 @@ router.post("/register", (req, res) => {
         const newUser = new User({
           name,
           email,
+          role,
           password,
         });
 
@@ -103,12 +107,21 @@ router.get("/logout", (req, res) => {
   res.redirect("/users/login");
 });
 
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array);
+  }
+}
 // Create post
-router.post("/create", multipartMiddleware, (req, res) => {
-  cloudinary.uploader.upload(req.files.image.path, function (result) {
-    // Create a post model
-    // by assembling all data as object
-    // and passing to Model instance
+router.post("/create", multipartMiddleware,async (req, res) => {
+    var urls = []
+    var img_id = []
+    await asyncForEach(req.files.image, async (img)=>{
+      var result = await cloudinary.uploader.upload(img.path,{folder:"posts"}); 
+      urls.push(result.url);
+      img_id.push(result.public_id);
+    })
+
     var post = new Post({
       author_id: req.body.author_id,
       author_name: req.body.author_name,
@@ -116,21 +129,76 @@ router.post("/create", multipartMiddleware, (req, res) => {
       description: req.body.description,
       hashtag: req.body.hashtag,
       created_at: new Date(),
-      // Store the URL in a DB for future use
-      image: result.url,
-      image_id: result.public_id,
+      image: JSON.stringify(urls),
+      image_id: JSON.stringify(img_id),
     });
-    // Persist by saving
+
     post.save(function (err) {
       if (err) {
         req.flash(err);
       }
-      // Redirect
       res.redirect("/blog");
     });
     post.on("es-indexed",(err,res)=>{
     })
-  });
+
 });
+
+// Create article
+router.post("/write", multipartMiddleware,async (req, res) => {
+  var urls=[]
+  var contents=[]
+  var savepath="articles/"+req.body.title
+  var img1 = await cloudinary.uploader.upload(req.files.image1.path,{folder:savepath});
+  var img2 = await cloudinary.uploader.upload(req.files.image2.path,{folder:savepath});
+  var img3 = await cloudinary.uploader.upload(req.files.image3.path,{folder:savepath});
+  urls.push(img1.url);
+  urls.push(img2.url);
+  urls.push(img3.url);
+  contents.push(req.body.content1);
+  contents.push(req.body.content2);
+  contents.push(req.body.content3);
+  contents.push(req.body.content4);
+  var article = new Article({
+    author_id: req.body.author_id,
+    author_name: req.body.author_name,
+    title: req.body.title,
+    sub_title: req.body.sub_title,
+    hashtag: req.body.hashtag,
+    created_at: new Date(),
+    images: JSON.stringify(urls),
+    content: JSON.stringify(contents),
+  });
+
+  article.save(function (err) {
+    if (err) {
+      req.flash(err);
+    }
+    res.redirect("/home");
+  });
+  article.on("es-indexed",(err,res)=>{
+  })
+
+});
+
+
+//Update avatar
+router.post("/avatarUpdate", multipartMiddleware, async (req, res)=>{
+  console.log(req.files.avatar);
+  var user = await User.findById(req.user._id);
+  var img = await cloudinary.uploader.upload(req.files.avatar.path,{folder:"avatars"});
+  user.avatar = img.url;
+  await user.save()
+  console.log(user)
+
+  res.redirect("/users/info?id="+req.user._id)
+})
+
+router.post("/test", multipartMiddleware, async (req,res)=>{
+  var savepath = "articles/"+req.body.title;
+  cloudinary.uploader.upload(req.files.image.path,{folder: savepath},(err,result)=>{
+    res.render("pages/test");
+  })
+})
 
 module.exports = router;
