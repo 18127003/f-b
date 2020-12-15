@@ -10,6 +10,7 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const Article = require("../models/Article");
 const { forwardAuthenticated, ensureAuthenticated } = require("../config/auth");
+const Favorite = require("../models/Favorite");
 
 // Login Page
 router.get("/login", forwardAuthenticated, (req, res) =>
@@ -21,12 +22,39 @@ router.get("/register", forwardAuthenticated, (req, res) =>
   res.render("pages/register",{errors:null})
 );
 
-router.get("/info", ensureAuthenticated, (req, res)=>{
-  Post.find({'author_id': req.query.id}, function (err, posts){
-    res.render("pages/user_info",{user:req.user, posts:posts})
-  })
+// Information page
+router.get("/info", ensureAuthenticated, async (req, res)=>{
+  if(req.user._id==req.query.id){
+    var posts = await Post.find({'author_id': req.user._id});
+    if(req.user.role=="ADMIN"){
+      var users = await User.find({role:{$ne: "ADMIN"}});
+      var articles = await Article.find({"author_id":req.user._id});
+      res.render("pages/user_info",{user:req.user, posts:posts, users:users, articles:articles, people:null})
+    } else{
+      res.render("pages/user_info",{user:req.user, posts:posts, people:null})
+    }
+  } else{
+    var posts = await Post.find({'author_id': req.query.id});
+    var people = await User.findById(req.query.id);
+    res.render("pages/user_info",{user:req.user, posts:posts, people:people})
+  }
+  
 })
 
+// Add favorite
+router.get("/addFavorite",ensureAuthenticated, async (req, res)=>{
+  var fav = new Favorite({
+    user_id:req.user._id,
+    type: req.query.type,
+    content_id: req.query.contentId
+  })
+  fav.save(function (err) {
+    if (err) {
+      req.flash(err);
+    }
+    res.send(" Success ");
+  });
+})
 
 // Register
 router.post("/register", (req, res) => {
@@ -107,6 +135,18 @@ router.get("/logout", (req, res) => {
   res.redirect("/users/login");
 });
 
+// Delete post
+router.get("/deletePost", async (req, res)=>{
+  var post = await Post.findByIdAndDelete(req.query.id);
+  images = JSON.parse(post.image_id);
+  await post.remove();
+  await asyncForEach(images, async(img)=>{
+    await cloudinary.uploader.destroy(img);
+  })
+  res.setHeader("user",JSON.stringify(req.user))
+  res.redirect("/users/info?id="+req.user._id)
+})
+
 async function asyncForEach(array, callback) {
   for (let index = 0; index < array.length; index++) {
     await callback(array[index], index, array);
@@ -117,10 +157,15 @@ router.post("/create", multipartMiddleware,async (req, res) => {
     var urls = []
     var img_id = []
     await asyncForEach(req.files.image, async (img)=>{
-      var result = await cloudinary.uploader.upload(img.path,{folder:"posts"}); 
+      let result = await cloudinary.uploader.upload(img.path,{folder:"posts"}); 
       urls.push(result.url);
       img_id.push(result.public_id);
     })
+    if(urls.length==0){
+      let result = await cloudinary.uploader.upload(req.files.image.path,{folder: "posts"});
+      urls.push(result.url);
+      img_id.push(result.public_id);
+    }
 
     var post = new Post({
       author_id: req.body.author_id,
@@ -147,6 +192,7 @@ router.post("/create", multipartMiddleware,async (req, res) => {
 // Create article
 router.post("/write", multipartMiddleware,async (req, res) => {
   var urls=[]
+  var img_id = []
   var contents=[]
   var savepath="articles/"+req.body.title
   var img1 = await cloudinary.uploader.upload(req.files.image1.path,{folder:savepath});
@@ -155,6 +201,9 @@ router.post("/write", multipartMiddleware,async (req, res) => {
   urls.push(img1.url);
   urls.push(img2.url);
   urls.push(img3.url);
+  img_id.push(img1.public_id);
+  img_id.push(img2.public_id);
+  img_id.push(img3.public_id);
   contents.push(req.body.content1);
   contents.push(req.body.content2);
   contents.push(req.body.content3);
@@ -167,6 +216,7 @@ router.post("/write", multipartMiddleware,async (req, res) => {
     hashtag: req.body.hashtag,
     created_at: new Date(),
     images: JSON.stringify(urls),
+    images_id: JSON.stringify(img_id),
     content: JSON.stringify(contents),
   });
 
@@ -182,23 +232,29 @@ router.post("/write", multipartMiddleware,async (req, res) => {
 });
 
 
-//Update avatar
+// Update avatar
 router.post("/avatarUpdate", multipartMiddleware, async (req, res)=>{
-  console.log(req.files.avatar);
+
   var user = await User.findById(req.user._id);
-  var img = await cloudinary.uploader.upload(req.files.avatar.path,{folder:"avatars"});
+  if(user.avatar_id!=null){
+    cloudinary.uploader.destroy(user.avatar_id, function(result){
+      user.avatar=null;
+      user.avatar_id=null;
+    })
+  }
+  var img = await cloudinary.uploader.upload(req.files.avatar.path,{width:300, height:300, crop:"thumb", folder:"avatars"});
   user.avatar = img.url;
+  user.avatar_id = img.public_id;
   await user.save()
-  console.log(user)
-
+  res.setHeader("user",JSON.stringify(req.user))
   res.redirect("/users/info?id="+req.user._id)
+
 })
 
-router.post("/test", multipartMiddleware, async (req,res)=>{
-  var savepath = "articles/"+req.body.title;
-  cloudinary.uploader.upload(req.files.image.path,{folder: savepath},(err,result)=>{
-    res.render("pages/test");
-  })
-})
+
+
+
+
+
 
 module.exports = router;
