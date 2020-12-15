@@ -41,20 +41,7 @@ router.get("/info", ensureAuthenticated, async (req, res)=>{
   
 })
 
-// Add favorite
-router.get("/addFavorite",ensureAuthenticated, async (req, res)=>{
-  var fav = new Favorite({
-    user_id:req.user._id,
-    type: req.query.type,
-    content_id: req.query.contentId
-  })
-  fav.save(function (err) {
-    if (err) {
-      req.flash(err);
-    }
-    res.send(" Success ");
-  });
-})
+
 
 // Register
 router.post("/register", (req, res) => {
@@ -254,7 +241,11 @@ router.post("/avatarUpdate", multipartMiddleware, async (req, res)=>{
 
 
 
-
-
+router.post("/test", multipartMiddleware, async (req,res)=>{
+  var savepath = "articles/"+req.body.title;
+  cloudinary.uploader.upload(req.files.image.path,{width:300, height:300, crop:"thumb",folder: savepath},(err,result)=>{
+    res.render("pages/test");
+  })
+})
 
 module.exports = router;
